@@ -1,0 +1,342 @@
+
+
+1 - genome_scores X genome-tags (4 colunas resultantes)
+
+	val df_genome1 = spark.read.format("csv").option("header","true").option("delimiter", ",").load("genome-scores.csv")
+
+	val df_genome2 = spark.read.format("csv").option("header","true").option("delimiter", ",").load("genome-tags.csv")
+
+	val junto =  df_genome2.join(df_genome1,"tagId")
+	
+_______ quantidade de registros resultantes ?
+	
+		junto.count()
+		Long = 11709768
+	
+_______ quantidade de registros com relevancia maior que 0.5 ?
+		
+		 junto.filter(junto("relevance") > 0.5).count()
+		 Long = 459572
+
+		
+_______ grave 1 arquivo csv com separador ';' - qual o tamanho do arquivo em bytes ?		
+
+		val juntov =  df_genome2.join(df_genome1,"tagId")
+		
+		juntov.cache()
+		
+		junto.coalesce(1).write.option("delimiter",";").("compression", "none").format("csv").option("header","true").save("spark-juncao-csv")
+		
+		val temp = System.nanoTime()
+		
+		444.329.327 bytes
+		
+		
+		
+		
+_______ salvando de novo com compressão gzip, qual o tamanho do arquivo em bytes ?
+		
+		junto2.coalesce(1).write.("compression", "gzip").format("csv").option("header","true").save("spark-mergev-gzip.csv")
+		
+		val temp2 = System.nanoTime()
+		
+		132.500.065 bytes
+		
+_______ faça um comparativo de tempo entre a gravação entre os dois arquivos.
+		
+		val finaltemp = temp - temp2
+		
+		
+
+
+2 - (genome_scores X genome-tags) x movies (6 colunas resultantes)
+
+		val df_genome1 = spark.read.format("csv").option("header","true").option("delimiter", ",").load("genome-scores.csv")
+		
+		val df_genome2 = spark.read.format("csv").option("header","true").option("delimiter", ",").load("genome-tags.csv")
+		
+		val df_movies = spark.read.format("csv").option("header","true").option("delimiter", ",").load("movies.csv")
+		
+		val juncao =  df_genome2.join(df_genome1,Seq("tagId"),"inner")
+		
+		juncao.cache()
+
+		val juncao2 = juncao.join(df_movies,Seq("movieId"),"inner")
+		
+		juncao2.cache()
+
+____ qual a quantidade de registros ?
+		
+		juncao2.count()  
+        11709768
+	
+____ qual o filme que tem a tag com a maior relevancia ?	
+	 
+    juncao2.orderBy(desc("relevance")).first()
+	
+____ considerando apenas relevância acima de 0.5, quantos registros aparecem ?
+	
+	juncao2.filter(juncao2("relevance") > 0.5).count()	
+	459572
+	
+____ grave 1 arquivo csv com separador ';' - qual o tamanho do arquivo em bytes ?		
+
+     junto2.coalesce(1).write.("compression", "none").format("csv").option("header","true").option("sep", ";").save("spark-mergev-gzip.csv")
+	
+		
+
+____ ao salvar com compressão gzip, qual o tamanho do arquivo em bytes ?
+	
+	 junto2.coalesce(1).write.("compression", "gzip").format("csv").option("header","true").option("sep", ";").save("spark-mergev-gzip.csv")
+	
+____ faça um comparativo de tempo entre a gravação entre os dois arquivos.
+
+	o primeiro 21s
+	
+	o segundo 29s
+
+
+____ nome dos cinco filmes com maior quantidade de tags ?
+	
+	junto2.select($"title").orderBy($"tag".desc).limit(5).show()
+
+
+
+3 - movies X links (5 colunas resultantes)
+
+	val df_movies = spark.read.format("csv").option("header","true").option("delimiter", ",").load("movies.csv")
+	
+	val df_links = spark.read.format("csv").option("header","true").option("delimiter", ",").load("links.csv")
+
+	val DF =  df_movies.join(df_links,Seq("movieId"), "inner")
+	
+
+____ quantidade de registros resultantes ?
+	
+	DF.count()
+	DF.cache()
+	
+____ grave o DF num arquivo parquet com compressão padrão. qual o tamanho do arquivo em bytes ?
+	
+	DF.coalesce(1).write.("compression", "snappy").format("parquet").option("header","true").save("spark-mergev-parquet")
+	
+    val temp1 = System.nanoTime()
+
+	
+____ e utilizando compressão gzip, qual o tamanho do arquivo em bytes ?
+	
+	DF.coalesce(1).write.("compression", "gzip").format("parquet").option("header","true").save("spark-mergev-parquet")
+	
+    val temp2 = System.nanoTime()
+
+____ faça um comparativo de tempo entre a gravação entre os dois arquivos.
+	
+    val temp = temp1 - temp2
+
+	
+____ inclua duas colunas, cada uma com o link completo das páginas IMDb e The Movie Database de cada filme.
+	
+    DF2 = DF.withColumn("http://movielens.org",lit("")).withColumn("http://www.imdb.com",lit(""))
+	
+	
+____ guarde este DF em 1 arquivo parquet com compressão padrão.
+
+    DF2.coalesce(1).write.("compression", "snappy").format("parquet").option("header","true").save("spark-mergev-parquet")
+
+
+4 - ratings
+
+____ levante a frequência das notas, ou seja, quantas vezes cada uma aparece no DF, e coloque em ordem crescente de notas
+
+	val rdd = sc.textFile("ratings.csv")
+
+	rdd.count()
+	Long = 20000264
+
+	val ratings = rdd.map(x => x.toString().split(",")(2))
+
+	val results = ratings.countByValue()
+	
+	results.toSeq.sortBy(_._1).foreach(println)
+	
+	(0.5,239125)
+	(1.0,680732)
+	(1.5,279252)
+	(2.0,1430997)
+	(2.5,883398)
+	(3.0,4291193)
+	(3.5,2200156)
+	(4.0,5561926)
+	(4.5,1534824)
+	(5.0,2898660)
+
+	
+
+5 - movies X ratings (5 colunas)
+
+	val df_movies = spark.read.format("csv").option("header","true").option("delimiter", ",").load("movies.csv")
+	
+	val df_ratings = spark.read.format("csv").option("header","true").option("delimiter", ",").load("ratings.csv")
+	
+	val df_mov =  df_movies.join(df_ratings,Seq("movieId"),"inner")
+
+____ quantidade de registros considerando também aqueles que não têm avaliação ?
+
+	val df_movleft = df_movies.join(df_ratings,Seq("movieId"),"left")
+    df_movleft.cache()
+    df_movleft.count()
+
+	
+____ quantidade de filmes sem avaliação ? = 534
+
+    val df_movleft = df_movies.join(df_ratings,Seq("movieId"),"left")
+
+	df_movleft.filter(col("rating").isNull).count()
+	
+	
+	
+____ considerando inclusive os filmes sem avaliações, grave 1 arquivo parquet com compressão snappy, qual o tamanho do arquivo em bytes ?
+
+	 df_movleft.coalesce(1).write.("compression", "snappy").format("parquet").option("header","true").save("spark-mergev-parquet")
+	  val temp1 = System.nanoTime()
+		
+____ com compressão gzip, qual o tamanho do arquivo em bytes ?
+	 
+	 df_movleft.coalesce(1).write.("compression", "gzip").format("parquet").option("header","true").save("spark-mergev-parquet")
+	 
+	 val temp2 = System.nanoTime()
+	
+____ faça um comparativo de tempo entre a gravação entre os dois arquivos.
+	
+    val temp = temp1 - temp2
+	primeiro 47s 
+	
+	segundo 50s	
+	
+____ entre os filmes sem avaliação, qual o código do filme que possui o título mais estenso ?
+      
+    val df_movies_nulo = df_movleft.filter(col("rating").isNull)
+    
+    import org.apache.spark.sql.functions._
+
+    df_movies_nulo.createOrReplaceTempView("movietag")
+
+    spark.sql("SELECT title, LENGTH(title) as min_title FROM movietag order by min_title desc").limit(1).show(false)
+
+   
+
+____ e o código do filme com título mais curto ?   
+   
+    spark.sql("SELECT title, LENGTH(title) as min_title FROM movietag order by min_title asc").limit(1).show(false)
+
+	
+____ entre todos os filmes, qual o código do filme com título mais estenso ?
+    
+    df_movleft.createOrReplaceTempView("movietitle")
+
+    spark.sql("SELECT title, LENGTH(title) as min_title FROM movietitle order by min_title desc").limit(1).show(false)
+
+____ calcule a nota média dos filmes. qual o melhor classificado ? com quantas avaliações ?    
+	   
+    df_movleft.groupBy($"title").agg(avg($"rating").as("media_rating")).show
+
+    df_movleft.select("movieId","title").groupBy("movieId","title").count.orderBy(desc("count")).show(false)    
+
+
+____ grave este DF em formato parquet com compressão padrão.
+    
+    df_movleft.coalesce(1).write.("compression", "snappy").format("parquet").option("header","true").save("spark-mergev-parquet")
+
+
+6 - movies X tags (6 colunas resultantes)
+
+	val df_movies = spark.read.format("csv").option("header","true").option("delimiter", ",").load("movies.csv")
+
+	val df_tags = spark.read.format("csv").option("header","true").option("delimiter", ",").load("tags.csv")
+	
+	val df_mov =  df_movies.join(df_tags,Seq("movieId"),"inner")
+    
+    val df_movleft = df_movies.join(df_tags,Seq("movieId"),"left")
+	
+	
+
+____ o que representa o cruzamento entre estes dois dataframes ?
+
+	relação de um usuario com relação o que foi dito de cada filme por usuario
+
+
+	
+____ grave 1 arquivo em formato parquet e compressão gzip. qual o tamanho deste arquivo em bytes ?
+
+	df_mov.coalesce(1).write.("compression", "gzip").format("parquet").option("header","true").save("spark-mergev-parquet")
+	
+	5.094.419
+	
+	
+____ utilizando compressão snappy, qual o tamanho deste arquivo em bytes ?
+	
+	df_mov.coalesce(1).write.("compression", "snappy").format("parquet").option("header","true").save("spark-mergev-parquet")
+	
+	7363750 
+
+____ faça um comparativo de tempo entre a gravação entre os dois arquivos.
+	primeiro 2s
+	segundo 1s
+	
+____ verifique se incluiu no dataframe os filmes sem tags. 
+
+	df_movies.join(df_tags,Seq("movieId"),"left").count()
+    473297
+
+    df_movies.join(df_tags,Seq("movieId"),"inner").count()
+    465564
+
+____ o DF completo (incluindo filmes sem tags), tem quantos registros ?
+	
+	df_movies.join(df_tags,Seq("movieId"),"left").count()
+    473297
+
+____ considerando apenas filmes com tags, quantos registros são ?
+	
+    val df_mov =  df_movies.join(df_tags,Seq("movieId"),"inner")
+    
+    df_mov.filter(col("tag").isNotNull).count()
+    465564
+
+	
+____ considerando apenas filmes com tags, quantos filmes são ?
+
+    val df_mov =  df_movies.join(df_tags,Seq("movieId"),"inner").filter(col("tag").isNotNull)
+    df_mov.select("tag","title").groupBy("tag","title").count.orderBy(desc("count")).count()
+    200364
+
+	
+____ quantos filmes não receberam tags ?
+	val df_mov =  df_movies.join(df_tags,Seq("movieId"),"left").filter(col("tag").isNull)
+    df_mov.count()
+    7733
+	
+____ entre os filmes sem tags, qual o id do filme com o título mais estenso ?
+
+     val df_movies_nulo = df_movleft.filter(col("tag").isNull)
+	
+    import org.apache.spark.sql.functions._
+
+    df_movies_nulo.createOrReplaceTempView("movietag")
+
+    spark.sql("SELECT title, LENGTH(title) as max_title FROM movietag order by max_title desc").limit(1).show(false)
+
+	
+____ entre os filmes sem tags, qual o id do filme com o título mais curto ?    
+  
+
+    val df_movies_nulo = df_movleft.filter(col("tag").isNull)
+
+    import org.apache.spark.sql.functions._
+
+    df_movies_nulo.createOrReplaceTempView("movietag")
+
+    spark.sql("SELECT title, LENGTH(title) as min_title FROM movietag order by min_title asc").limit(1).show(false)
+
+  
+
